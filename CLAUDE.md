@@ -9,10 +9,11 @@ ranks them by relevance to a specific research focus (music training, motor lear
 auditory-motor integration, brass/trombone performance), and emails a summary. Built as a
 standalone Python project — no client framework, no build step.
 
-**Zero paid APIs anywhere in the pipeline.** PubMed E-utilities and NIH's iCite are both free
-and keyless; relevance scoring and summarization are local keyword/heuristic logic, not an LLM
-call; Gmail SMTP is free. Keep it that way — don't introduce a billed API without discussing it
-first, since "no ongoing cost" is a deliberate design constraint here, not an oversight.
+**Zero paid APIs anywhere in the pipeline.** PubMed E-utilities, NIH's iCite, and OpenAlex are
+all free and keyless; relevance scoring, summarization, and metadata extraction are local
+keyword/regex heuristics, not an LLM call; Gmail SMTP is free. Keep it that way — don't
+introduce a billed API without discussing it first, since "no ongoing cost" is a deliberate
+design constraint here, not an oversight.
 
 ## Commands
 
@@ -42,11 +43,25 @@ Three "skills" orchestrated by `main.py`:
   top-ranked article becomes the "must-read") and to filter classic-pick candidates.
 - `citations.py` — looks up citation counts for a batch of PMIDs via NIH's free iCite API.
   Used only for ranking classic-pick candidates by actual impact.
+- `metadata_extraction.py` — pure local heuristics (no network) that derive four per-article
+  fields shown in the email: `study_type` (PubMed's own PublicationType tags first, falling
+  back to design-language regexes over the abstract), `methods` (modality keywords with
+  modality-specific metric sub-lists, e.g. fMRI → graph theory/ISC/functional connectivity,
+  diffusion MRI → FA/MD/tractography, EEG/MEG → ERP/oscillations/coherence), and
+  `sample_size` (regex over the abstract for "N musicians"/"N = 45" style mentions). All
+  best-effort by design — abstracts phrase this inconsistently — and labeled as such in the
+  email footer.
+- `journal_quality.py` — looks up each article's journal via OpenAlex (`works/pmid:{id}` →
+  `sources/{id}`) and reports its 2-year mean citedness as a quality tier. Caches by source ID
+  within a run since multiple articles often share a journal. Fully resilient: any lookup
+  failure degrades to "Impact data unavailable" rather than raising, so an OpenAlex outage
+  never blocks the digest from sending.
 - `summarize.py` — turns an abstract into a short summary by extracting its lead 1–3
   sentences (research abstracts conventionally front-load the aim/method). Purely local.
 - `send_email.py` — builds the plain-text + HTML digest and sends it via Gmail SMTP
-  (`smtplib`, STARTTLS). Layout: must-read article highlighted first, then the rest of the
-  week's new articles, then the classic pick in its own section.
+  (`smtplib`, STARTTLS). Layout: must-read article highlighted first (with its type/method/N/
+  journal-quality metadata), then the rest of the week's new articles, then the classic pick
+  in its own section — every article carries the same four metadata fields.
 
 `main.py` ties it together each run:
 
@@ -56,7 +71,9 @@ Three "skills" orchestrated by `main.py`:
    email, leave the rest in the backlog for next run. The top-ranked article is the must-read.
 4. Search for one classic pick (older, relevant, ranked by real citation count via iCite,
    excluding anything already featured or already in this week's batch).
-5. Summarize, send, update state.
+5. Attach `study_type` / `methods` / `sample_size` (local) and `journal_quality` (OpenAlex,
+   network) to every article going into the email.
+6. Summarize, send, update state.
 
 If there's nothing to send (no new articles and no classic candidate), no email goes out —
 `logs/run.log` still records that the run happened, since it's meant to run unattended via

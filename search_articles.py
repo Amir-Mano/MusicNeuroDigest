@@ -103,6 +103,11 @@ def _fetch_details(pmids: list) -> list:
         abstract_parts = art.findall(".//Abstract/AbstractText")
         abstract = " ".join("".join(p.itertext()).strip() for p in abstract_parts) if abstract_parts else ""
         journal = art.findtext(".//Journal/Title", default="").strip()
+        publication_types = [
+            (pt.text or "").strip()
+            for pt in art.findall(".//PublicationTypeList/PublicationType")
+            if (pt.text or "").strip()
+        ]
 
         authors = []
         for author in art.findall(".//AuthorList/Author"):
@@ -131,6 +136,7 @@ def _fetch_details(pmids: list) -> list:
             "pub_date": pub_date,
             "abstract": abstract or "No abstract available.",
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+            "publication_types": publication_types,
         })
     return articles
 

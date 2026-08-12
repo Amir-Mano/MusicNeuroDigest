@@ -13,6 +13,16 @@ def _authors_line(a: dict) -> str:
     return f"{authors} -- {a['journal']} ({a['pub_date']})"
 
 
+def _metadata_lines(a: dict) -> list:
+    """Type / method / sample size / journal quality -- auto-extracted, best-effort."""
+    return [
+        f"Type: {a.get('study_type', 'Not specified')}",
+        f"Method: {a.get('methods', 'Not specified')}",
+        f"N: {a.get('sample_size', 'Not stated')}",
+        f"Journal: {a.get('journal_quality', 'Impact data unavailable')}",
+    ]
+
+
 def _build_plain_text(articles: list, must_read: dict | None, classic: dict | None) -> str:
     lines = [f"Music & Neuroplasticity Digest -- {date.today().isoformat()}", ""]
 
@@ -20,6 +30,7 @@ def _build_plain_text(articles: list, must_read: dict | None, classic: dict | No
         lines.append("MUST-READ THIS WEEK")
         lines.append(must_read["title"])
         lines.append(_authors_line(must_read))
+        lines.extend(_metadata_lines(must_read))
         lines.append(must_read["summary"])
         lines.append(must_read["url"])
         lines.append("")
@@ -30,6 +41,7 @@ def _build_plain_text(articles: list, must_read: dict | None, classic: dict | No
         for a in others:
             lines.append(a["title"])
             lines.append(_authors_line(a))
+            lines.extend(_metadata_lines(a))
             lines.append(a["summary"])
             lines.append(a["url"])
             lines.append("")
@@ -39,11 +51,22 @@ def _build_plain_text(articles: list, must_read: dict | None, classic: dict | No
         lines.append(classic["title"])
         lines.append(_authors_line(classic))
         lines.append(f"Cited {classic.get('citation_count', 0)} times")
+        lines.extend(_metadata_lines(classic))
         lines.append(classic["summary"])
         lines.append(classic["url"])
         lines.append("")
 
+    lines.append(
+        "* Type / method / N are extracted automatically from PubMed metadata and "
+        "abstract text and may be incomplete -- verify against the paper itself."
+    )
+
     return "\n".join(lines)
+
+
+def _metadata_html(a: dict) -> str:
+    items = "".join(f"<li>{line}</li>" for line in _metadata_lines(a))
+    return f'<ul style="margin:0 0 8px;padding-left:18px;color:#666;font-size:0.85em;">{items}</ul>'
 
 
 def _article_block(a: dict, extra_line: str = "") -> str:
@@ -53,6 +76,7 @@ def _article_block(a: dict, extra_line: str = "") -> str:
           <h3 style="margin:0 0 4px;"><a href="{a['url']}">{a['title']}</a></h3>
           <p style="margin:0 0 8px;color:#555;font-size:0.9em;">{_authors_line(a)}</p>
           {extra}
+          {_metadata_html(a)}
           <p style="margin:0;">{a['summary']}</p>
         </div>"""
 
@@ -79,6 +103,13 @@ def _build_html(articles: list, must_read: dict | None, classic: dict | None) ->
         <div style="border:2px solid #2980b9;border-radius:8px;padding:12px 16px;">
           {_article_block(classic, extra_line=cite_line)}
         </div>""")
+
+    sections.append(
+        '<p style="margin:24px 0 0;color:#999;font-size:0.8em;">'
+        "* Type / method / N are extracted automatically from PubMed metadata and "
+        "abstract text and may be incomplete &mdash; verify against the paper itself."
+        "</p>"
+    )
 
     return f"""
     <html><body style="font-family:sans-serif;max-width:640px;margin:auto;">

@@ -4,6 +4,8 @@ import logging
 import sys
 
 import config
+import journal_quality
+import metadata_extraction
 import relevance
 import search_articles
 import send_email
@@ -58,6 +60,13 @@ def run() -> None:
             "Sending %d new article(s) (%d held back for next week); classic pick: %s",
             len(this_week), len(backlog), classic["pmid"] if classic else "none",
         )
+
+        all_for_email = this_week + ([classic] if classic else [])
+        for article in all_for_email:
+            article["study_type"] = metadata_extraction.classify_study_type(article)
+            article["methods"] = metadata_extraction.extract_methods(article)
+            article["sample_size"] = metadata_extraction.extract_sample_size(article)
+        journal_quality.attach_journal_quality(all_for_email)
 
         summarize.summarize_articles(this_week)
         if classic:

@@ -19,11 +19,15 @@ locally, and Gmail SMTP is free. The only external cost is nothing.
    pick the must-read.
 3. **`citations.py`** — looks up real citation counts from NIH's free
    [iCite API](https://icite.od.nih.gov/) for classic-pick candidates.
-4. **`summarize.py`** — produces a short summary of each abstract **locally**: the
+4. **`metadata_extraction.py`** — pulls study type, method/metrics, and reported
+   sample size for each article (see below). Local heuristics only, no network.
+5. **`journal_quality.py`** — looks up each article's journal quality via the free
+   [OpenAlex API](https://openalex.org/) (see below).
+6. **`summarize.py`** — produces a short summary of each abstract **locally**: the
    lead 1–3 sentences, which is where research abstracts conventionally state the
    aim/method before results.
-5. **`send_email.py`** — builds and sends the digest over Gmail SMTP.
-6. **`main.py`** ties it together and manages the state below.
+7. **`send_email.py`** — builds and sends the digest over Gmail SMTP.
+8. **`main.py`** ties it together and manages the state below.
 
 ## Digest shape
 
@@ -41,6 +45,29 @@ locally, and Gmail SMTP is free. The only external cost is nothing.
 State lives in `state/`: `seen_pmids.json` (already-sent new articles),
 `seen_classic_pmids.json` (already-featured classics), and
 `pending_articles.json` (this week's overflow, for next week).
+
+## Per-article metadata
+
+Every article in the digest — must-read, "also new," and the classic pick — gets
+four extra fields, all extracted automatically (no LLM, no billing) and shown as
+a best-effort reading aid, not a substitute for reading the paper:
+
+- **Type** — PubMed's own publication-type tags when informative (Review,
+  Meta-Analysis, Randomized Controlled Trial, etc.); falls back to detecting
+  design language in the abstract (longitudinal, cross-sectional, cohort, pilot,
+  etc.) when PubMed only has it tagged as a generic "Journal Article."
+- **Method** — modality (fMRI, diffusion MRI, EEG, MEG, structural MRI, PET,
+  fNIRS, TMS, MRS, behavioral) plus, within each, specific metrics/analyses
+  mentioned in the abstract (graph theory, ISC, FA, MD, ERP, functional
+  connectivity, MVPA, etc.).
+- **N** — sample size as reported in the abstract, e.g. "32 musicians, 28
+  controls" or "N = 45." Abstracts phrase this inconsistently, so this is
+  regex-based best-effort, not guaranteed complete.
+- **Journal** — a quality signal from each journal's 2-year mean citedness via
+  [OpenAlex](https://openalex.org/) (free, no key) — the same underlying
+  computation as a journal impact factor, just not the trademarked Clarivate/JCR
+  number. Falls back to "Impact data unavailable" if OpenAlex doesn't have the
+  journal or the article isn't indexed yet.
 
 ## One-time setup
 
