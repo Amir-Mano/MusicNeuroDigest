@@ -23,7 +23,9 @@ def _metadata_lines(a: dict) -> list:
     ]
 
 
-def _build_plain_text(articles: list, must_read: dict | None, classic: dict | None) -> str:
+def _build_plain_text(
+    articles: list, must_read: dict | None, classic: dict | None, preprints: list
+) -> str:
     lines = [f"Music & Neuroplasticity Digest -- {date.today().isoformat()}", ""]
 
     if must_read:
@@ -56,6 +58,16 @@ def _build_plain_text(articles: list, must_read: dict | None, classic: dict | No
         lines.append(classic["url"])
         lines.append("")
 
+    if preprints:
+        lines.append("PREPRINTS -- *** NOT PEER-REVIEWED *** (bioRxiv/medRxiv)")
+        for p in preprints:
+            lines.append(p["title"])
+            lines.append(_authors_line(p))
+            lines.extend(_metadata_lines(p))
+            lines.append(p["summary"])
+            lines.append(p["url"])
+            lines.append("")
+
     lines.append(
         "* Type / method / N are extracted automatically from PubMed metadata and "
         "abstract text and may be incomplete -- verify against the paper itself."
@@ -81,7 +93,9 @@ def _article_block(a: dict, extra_line: str = "") -> str:
         </div>"""
 
 
-def _build_html(articles: list, must_read: dict | None, classic: dict | None) -> str:
+def _build_html(
+    articles: list, must_read: dict | None, classic: dict | None, preprints: list
+) -> str:
     sections = []
 
     if must_read:
@@ -104,6 +118,18 @@ def _build_html(articles: list, must_read: dict | None, classic: dict | None) ->
           {_article_block(classic, extra_line=cite_line)}
         </div>""")
 
+    if preprints:
+        preprint_blocks = "".join(_article_block(p) for p in preprints)
+        sections.append(f"""
+        <h3 style="margin:28px 0 8px;">Preprints</h3>
+        <div style="border:2px solid #e67e22;border-radius:8px;padding:12px 16px;">
+          <p style="margin:0 0 12px;padding:6px 10px;background:#fdf0e2;color:#8a4b0a;
+                     font-weight:bold;font-size:0.85em;border-radius:4px;">
+            &#9888; NOT PEER-REVIEWED &mdash; bioRxiv/medRxiv preprint, findings unvetted
+          </p>
+          {preprint_blocks}
+        </div>""")
+
     sections.append(
         '<p style="margin:24px 0 0;color:#999;font-size:0.8em;">'
         "* Type / method / N are extracted automatically from PubMed metadata and "
@@ -118,20 +144,29 @@ def _build_html(articles: list, must_read: dict | None, classic: dict | None) ->
     </body></html>"""
 
 
-def send_digest(articles: list, must_read: dict | None = None, classic: dict | None = None) -> None:
+def send_digest(
+    articles: list,
+    must_read: dict | None = None,
+    classic: dict | None = None,
+    preprints: list | None = None,
+) -> None:
     """Send the digest email. No-ops (returns) if there's nothing to send."""
-    if not articles and not classic:
+    preprints = preprints or []
+    if not articles and not classic and not preprints:
         return
 
     if not (config.EMAIL_ADDRESS and config.EMAIL_APP_PASSWORD and config.EMAIL_TO):
         raise RuntimeError("EMAIL_ADDRESS / EMAIL_APP_PASSWORD / EMAIL_TO must be set in .env")
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Music & Neuroplasticity Digest — {date.today().isoformat()} ({len(articles)} new)"
+    msg["Subject"] = (
+        f"Music & Neuroplasticity Digest — {date.today().isoformat()} "
+        f"({len(articles)} new{f', {len(preprints)} preprint(s)' if preprints else ''})"
+    )
     msg["From"] = config.EMAIL_ADDRESS
     msg["To"] = config.EMAIL_TO
-    msg.attach(MIMEText(_build_plain_text(articles, must_read, classic), "plain"))
-    msg.attach(MIMEText(_build_html(articles, must_read, classic), "html"))
+    msg.attach(MIMEText(_build_plain_text(articles, must_read, classic, preprints), "plain"))
+    msg.attach(MIMEText(_build_html(articles, must_read, classic, preprints), "html"))
 
     with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT) as server:
         server.starttls()

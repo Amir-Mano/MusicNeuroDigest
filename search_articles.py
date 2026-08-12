@@ -101,7 +101,14 @@ def _fetch_details(pmids: list) -> list:
         pmid = art.findtext(".//PMID", default="").strip()
         title = "".join(art.find(".//ArticleTitle").itertext()).strip() if art.find(".//ArticleTitle") is not None else ""
         abstract_parts = art.findall(".//Abstract/AbstractText")
-        abstract = " ".join("".join(p.itertext()).strip() for p in abstract_parts) if abstract_parts else ""
+        abstract_sections = [
+            {
+                "label": (p.get("NlmCategory") or p.get("Label") or "").strip().upper(),
+                "text": "".join(p.itertext()).strip(),
+            }
+            for p in abstract_parts
+        ]
+        abstract = " ".join(s["text"] for s in abstract_sections) if abstract_sections else ""
         journal = art.findtext(".//Journal/Title", default="").strip()
         publication_types = [
             (pt.text or "").strip()
@@ -135,6 +142,7 @@ def _fetch_details(pmids: list) -> list:
             "journal": journal,
             "pub_date": pub_date,
             "abstract": abstract or "No abstract available.",
+            "abstract_sections": abstract_sections,
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
             "publication_types": publication_types,
         })

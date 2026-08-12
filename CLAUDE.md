@@ -9,11 +9,11 @@ ranks them by relevance to a specific research focus (music training, motor lear
 auditory-motor integration, brass/trombone performance), and emails a summary. Built as a
 standalone Python project — no client framework, no build step.
 
-**Zero paid APIs anywhere in the pipeline.** PubMed E-utilities, NIH's iCite, and OpenAlex are
-all free and keyless; relevance scoring, summarization, and metadata extraction are local
-keyword/regex heuristics, not an LLM call; Gmail SMTP is free. Keep it that way — don't
-introduce a billed API without discussing it first, since "no ongoing cost" is a deliberate
-design constraint here, not an oversight.
+**Zero paid APIs anywhere in the pipeline.** PubMed E-utilities, NIH's iCite, OpenAlex, and
+Europe PMC are all free and keyless; relevance scoring, summarization, and metadata extraction
+are local keyword/regex heuristics, not an LLM call; Gmail SMTP is free. Keep it that way —
+don't introduce a billed API without discussing it first, since "no ongoing cost" is a
+deliberate design constraint here, not an oversight.
 
 ## Commands
 
@@ -56,28 +56,43 @@ Three "skills" orchestrated by `main.py`:
   within a run since multiple articles often share a journal. Fully resilient: any lookup
   failure degrades to "Impact data unavailable" rather than raising, so an OpenAlex outage
   never blocks the digest from sending.
-- `summarize.py` — turns an abstract into a short summary by extracting its lead 1–3
-  sentences (research abstracts conventionally front-load the aim/method). Purely local.
+- `summarize.py` — turns an abstract into a short summary. If PubMed provided a structured
+  abstract (`abstract_sections` with NlmCategory/Label like RESULTS or CONCLUSIONS), extracts
+  from those sections so the summary is the actual finding rather than background/rationale;
+  otherwise falls back to the lead 1–3 sentences. Purely local.
+- `preprints.py` — searches bioRxiv/medRxiv preprints via Europe PMC (`SRC:PPR` +
+  `bookOrReportDetails.publisher` filtered to exactly "bioRxiv"/"medRxiv", since Europe PMC's
+  preprint index spans many servers). Every result carries `is_preprint: True`. Owns its own
+  state (`state/seen_preprint_ids.json`, `state/pending_preprints.json`) and its own small
+  backlog/cap (`PREPRINT_MAX_PER_DIGEST`), entirely separate from the peer-reviewed pool —
+  they must never get merged into `search_articles.py`'s pending queue.
 - `send_email.py` — builds the plain-text + HTML digest and sends it via Gmail SMTP
   (`smtplib`, STARTTLS). Layout: must-read article highlighted first (with its type/method/N/
-  journal-quality metadata), then the rest of the week's new articles, then the classic pick
-  in its own section — every article carries the same four metadata fields.
+  journal-quality metadata), then the rest of the week's new articles, then the classic pick,
+  then a distinctly-badged "Preprints" section ("NOT PEER-REVIEWED") — every article carries
+  the same four metadata fields except preprints, whose `journal_quality` is hardcoded to a
+  not-applicable label rather than looked up.
 
 `main.py` ties it together each run:
 
-1. Load state (`seen_pmids`, `seen_classic_pmids`, `pending_articles`).
+1. Load state (`seen_pmids`, `seen_classic_pmids`, `pending_articles`, plus the preprint
+   equivalents).
 2. Search PubMed for fresh articles not already seen or queued; append to the pending backlog.
 3. Rank the full backlog by relevance; take the top `MAX_DIGEST_SIZE` (default 8) for this
    email, leave the rest in the backlog for next run. The top-ranked article is the must-read.
 4. Search for one classic pick (older, relevant, ranked by real citation count via iCite,
    excluding anything already featured or already in this week's batch).
-5. Attach `study_type` / `methods` / `sample_size` (local) and `journal_quality` (OpenAlex,
-   network) to every article going into the email.
-6. Summarize, send, update state.
+5. Search for new preprints; rank by the same relevance scorer; take the top
+   `PREPRINT_MAX_PER_DIGEST` (default 2), backlog the rest.
+6. Attach `study_type` / `methods` / `sample_size` (local) to every article going into the
+   email, including preprints. Attach `journal_quality` (OpenAlex, network) only to the
+   peer-reviewed set — preprints get a hardcoded not-applicable label instead, since an
+   OpenAlex PMID lookup wouldn't resolve for them anyway.
+7. Summarize, send, update state (including the preprint backlog/seen-set).
 
-If there's nothing to send (no new articles and no classic candidate), no email goes out —
-`logs/run.log` still records that the run happened, since it's meant to run unattended via
-Windows Task Scheduler and there's no other way to confirm it's alive.
+If there's nothing to send (no new articles, no classic candidate, no preprints), no email
+goes out — `logs/run.log` still records that the run happened, since it's meant to run
+unattended via Windows Task Scheduler and there's no other way to confirm it's alive.
 
 ## Config
 
@@ -96,5 +111,7 @@ window as new — useful for verifying formatting changes without waiting for re
 ## Scheduling
 
 Meant to run unattended via Windows Task Scheduler (`run_weekly.bat`, weekly), not via any
-Claude-Code-specific scheduling — see README for the `schtasks` command. The pipeline has no
-dependency on Claude Code or any Anthropic service at runtime.
+Claude-Code-specific scheduling — see README for the `schtasks` command. The task has
+`StartWhenAvailable` enabled so a missed run (PC off/asleep) fires as soon as the machine is
+next available rather than silently skipping that week. The pipeline has no dependency on
+Claude Code or any Anthropic service at runtime.

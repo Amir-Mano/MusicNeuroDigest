@@ -4,9 +4,10 @@ Watches PubMed for new articles on music + neuroplasticity/neuroimaging, ranks t
 by relevance to a specific research focus (music training, motor learning,
 auditory-motor integration, brass/trombone performance), and emails a weekly digest.
 
-No paid API involved anywhere in the pipeline: PubMed's E-utilities and NIH's iCite
-are both free with no key required, relevance scoring and summarization are done
-locally, and Gmail SMTP is free. The only external cost is nothing.
+No paid API involved anywhere in the pipeline: PubMed's E-utilities, NIH's iCite,
+OpenAlex, and Europe PMC are all free with no key required, relevance scoring and
+summarization are done locally, and Gmail SMTP is free. The only external cost is
+nothing.
 
 ## How it works
 
@@ -23,11 +24,14 @@ locally, and Gmail SMTP is free. The only external cost is nothing.
    sample size for each article (see below). Local heuristics only, no network.
 5. **`journal_quality.py`** — looks up each article's journal quality via the free
    [OpenAlex API](https://openalex.org/) (see below).
-6. **`summarize.py`** — produces a short summary of each abstract **locally**: the
-   lead 1–3 sentences, which is where research abstracts conventionally state the
-   aim/method before results.
-7. **`send_email.py`** — builds and sends the digest over Gmail SMTP.
-8. **`main.py`** ties it together and manages the state below.
+6. **`summarize.py`** — produces a short summary of each abstract **locally**. When
+   PubMed provides a structured abstract (BACKGROUND/METHODS/RESULTS/CONCLUSIONS
+   labels), pulls from RESULTS/CONCLUSIONS so the summary is the actual finding;
+   otherwise falls back to the lead 1–3 sentences.
+7. **`preprints.py`** — searches bioRxiv/medRxiv preprints via the free
+   [Europe PMC API](https://europepmc.org/) (see below).
+8. **`send_email.py`** — builds and sends the digest over Gmail SMTP.
+9. **`main.py`** ties it together and manages the state below.
 
 ## Digest shape
 
@@ -42,9 +46,17 @@ locally, and Gmail SMTP is free. The only external cost is nothing.
   the most-cited one that hasn't been sent before. This surfaces high-impact
   older work alongside the fresh stuff — never repeats.
 
+- **Up to 2 preprints per email, always clearly marked.** A separate search on
+  bioRxiv/medRxiv via Europe PMC finds new preprints matching the same relevance
+  keywords. They're tracked in their own backlog, capped at
+  `PREPRINT_MAX_PER_DIGEST` per email, and rendered in their own section with an
+  explicit "NOT PEER-REVIEWED" badge — never mixed into the peer-reviewed pool
+  above, and no journal-quality score is shown for them (they don't have one yet).
+
 State lives in `state/`: `seen_pmids.json` (already-sent new articles),
-`seen_classic_pmids.json` (already-featured classics), and
-`pending_articles.json` (this week's overflow, for next week).
+`seen_classic_pmids.json` (already-featured classics), `pending_articles.json`
+(this week's overflow, for next week), `seen_preprint_ids.json`, and
+`pending_preprints.json` (same overflow model, separate from the main pool).
 
 ## Per-article metadata
 
@@ -110,10 +122,24 @@ schtasks /create /tn "MusicNeuroDigest" /tr "<full path to>\run_weekly.bat" /sc 
 - Change the day/time: `schtasks /change /tn "MusicNeuroDigest" /st 09:30`
 - Remove it: `schtasks /delete /tn "MusicNeuroDigest"`
 
+**"Run as soon as possible after a missed start" is enabled** (`StartWhenAvailable`),
+so if the PC is off/asleep at the scheduled time, the digest fires as soon as it's
+next on instead of silently skipping that week:
+
+```powershell
+$task = Get-ScheduledTask -TaskName "MusicNeuroDigest"
+$task.Settings.StartWhenAvailable = $true
+Set-ScheduledTask -InputObject $task | Out-Null
+```
+
 ## Tuning
 
 - `config.py`: `PUBMED_QUERY` / `SEARCH_LOOKBACK_DAYS` (search scope),
   `MAX_DIGEST_SIZE` (per-email cap), `CLASSIC_MIN_AGE_DAYS` /
-  `CLASSIC_CANDIDATE_POOL` (classic-pick behavior).
+  `CLASSIC_CANDIDATE_POOL` (classic-pick behavior), `PREPRINT_QUERY` /
+  `PREPRINT_MAX_PER_DIGEST` (preprint search and cap).
 - `relevance.py`: `_KEYWORDS` — adjust the weighted keyword list to match your
   own research focus if you fork this for a different field.
+- `metadata_extraction.py`: `_MODALITY_PATTERNS` / `_FMRI_METRIC_PATTERNS` /
+  `_DIFFUSION_METRIC_PATTERNS` / `_EEG_METRIC_PATTERNS` / `_DESIGN_PATTERNS` —
+  extend these if you notice a common method/design term the digest is missing.

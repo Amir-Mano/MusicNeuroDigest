@@ -25,6 +25,14 @@ CLASSIC_MIN_AGE_DAYS = 730  # "not so fresh" cutoff for the high-impact pick
 CLASSIC_SEARCH_FLOOR = "1990/01/01"  # don't look further back than this
 CLASSIC_CANDIDATE_POOL = 40  # how many relevance-ranked older articles to pull before citation-ranking
 
+# --- Preprints (bioRxiv/medRxiv via Europe PMC) ---
+# Plain-text version of PUBMED_QUERY -- Europe PMC doesn't use PubMed's [Title/Abstract] field tags.
+PREPRINT_QUERY = (
+    '(music) AND (neuroplasticity OR "neural plasticity" OR neuroimaging '
+    'OR fMRI OR MRI OR EEG OR MEG)'
+)
+PREPRINT_MAX_PER_DIGEST = 2  # not peer-reviewed -- kept small and clearly labeled
+
 # --- Email ---
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")
@@ -37,5 +45,7 @@ STATE_DIR = BASE_DIR / "state"
 SEEN_PMIDS_PATH = STATE_DIR / "seen_pmids.json"
 SEEN_CLASSIC_PMIDS_PATH = STATE_DIR / "seen_classic_pmids.json"
 PENDING_PATH = STATE_DIR / "pending_articles.json"
+SEEN_PREPRINT_IDS_PATH = STATE_DIR / "seen_preprint_ids.json"
+PENDING_PREPRINTS_PATH = STATE_DIR / "pending_preprints.json"
 LOGS_DIR = BASE_DIR / "logs"
 LOG_PATH = LOGS_DIR / "run.log"
