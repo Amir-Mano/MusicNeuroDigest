@@ -4,6 +4,7 @@ import logging
 import sys
 
 import config
+import history
 import journal_quality
 import metadata_extraction
 import preprints
@@ -116,6 +117,7 @@ def run() -> None:
         send_email.send_digest(
             this_week, must_read=must_read, classic=classic, preprints=this_week_preprints
         )
+        history.record_sent(this_week, must_read, classic, this_week_preprints)
 
         seen_pmids.update(a["pmid"] for a in this_week)
         search_articles.save_seen_pmids(seen_pmids)

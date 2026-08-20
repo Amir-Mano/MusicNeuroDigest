@@ -10,9 +10,9 @@ approach as the main article pool in search_articles.py.
 import json
 from datetime import date, timedelta
 
-import requests
-
 import config
+import http_utils
+import state_utils
 
 EUROPEPMC_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 _TIMEOUT = 30
@@ -25,10 +25,7 @@ def load_seen_preprint_ids() -> set:
 
 
 def save_seen_preprint_ids(ids: set) -> None:
-    config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    config.SEEN_PREPRINT_IDS_PATH.write_text(
-        json.dumps(sorted(ids), indent=2), encoding="utf-8"
-    )
+    state_utils.save_json(config.SEEN_PREPRINT_IDS_PATH, sorted(ids))
 
 
 def load_pending_preprints() -> list:
@@ -38,10 +35,7 @@ def load_pending_preprints() -> list:
 
 
 def save_pending_preprints(preprints: list) -> None:
-    config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    config.PENDING_PREPRINTS_PATH.write_text(
-        json.dumps(preprints, indent=2), encoding="utf-8"
-    )
+    state_utils.save_json(config.PENDING_PREPRINTS_PATH, preprints)
 
 
 def _search_preprint_records() -> list:
@@ -57,8 +51,7 @@ def _search_preprint_records() -> list:
         "pageSize": 50,
         "resultType": "core",
     }
-    resp = requests.get(EUROPEPMC_URL, params=params, timeout=_TIMEOUT)
-    resp.raise_for_status()
+    resp = http_utils.get_with_retry(EUROPEPMC_URL, params=params, timeout=_TIMEOUT)
     return resp.json().get("resultList", {}).get("result", [])
 
 

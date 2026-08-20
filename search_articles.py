@@ -4,11 +4,11 @@ import json
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
 
-import requests
-
 import citations
 import config
+import http_utils
 import relevance
+import state_utils
 
 ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
@@ -21,10 +21,7 @@ def load_seen_pmids() -> set:
 
 
 def save_seen_pmids(pmids: set) -> None:
-    config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    config.SEEN_PMIDS_PATH.write_text(
-        json.dumps(sorted(pmids), indent=2), encoding="utf-8"
-    )
+    state_utils.save_json(config.SEEN_PMIDS_PATH, sorted(pmids))
 
 
 def load_seen_classic_pmids() -> set:
@@ -34,10 +31,7 @@ def load_seen_classic_pmids() -> set:
 
 
 def save_seen_classic_pmids(pmids: set) -> None:
-    config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    config.SEEN_CLASSIC_PMIDS_PATH.write_text(
-        json.dumps(sorted(pmids), indent=2), encoding="utf-8"
-    )
+    state_utils.save_json(config.SEEN_CLASSIC_PMIDS_PATH, sorted(pmids))
 
 
 def load_pending_articles() -> list:
@@ -47,10 +41,7 @@ def load_pending_articles() -> list:
 
 
 def save_pending_articles(articles: list) -> None:
-    config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    config.PENDING_PATH.write_text(
-        json.dumps(articles, indent=2), encoding="utf-8"
-    )
+    state_utils.save_json(config.PENDING_PATH, articles)
 
 
 def _esearch_params(mindate: str, maxdate: str) -> dict:
@@ -72,12 +63,11 @@ def _esearch_params(mindate: str, maxdate: str) -> dict:
 def _search_pmids() -> list:
     maxdate = date.today()
     mindate = maxdate - timedelta(days=config.SEARCH_LOOKBACK_DAYS)
-    resp = requests.get(
+    resp = http_utils.get_with_retry(
         ESEARCH_URL,
         params=_esearch_params(mindate.isoformat(), maxdate.isoformat()),
         timeout=30,
     )
-    resp.raise_for_status()
     return resp.json().get("esearchresult", {}).get("idlist", [])
 
 
@@ -92,8 +82,7 @@ def _fetch_details(pmids: list) -> list:
     }
     if config.NCBI_API_KEY:
         params["api_key"] = config.NCBI_API_KEY
-    resp = requests.get(EFETCH_URL, params=params, timeout=30)
-    resp.raise_for_status()
+    resp = http_utils.get_with_retry(EFETCH_URL, params=params, timeout=30)
 
     articles = []
     root = ET.fromstring(resp.content)
@@ -169,8 +158,7 @@ def _search_pmids_by_relevance(mindate: str, maxdate: str, retmax: int) -> list:
     }
     if config.NCBI_API_KEY:
         params["api_key"] = config.NCBI_API_KEY
-    resp = requests.get(ESEARCH_URL, params=params, timeout=30)
-    resp.raise_for_status()
+    resp = http_utils.get_with_retry(ESEARCH_URL, params=params, timeout=30)
     return resp.json().get("esearchresult", {}).get("idlist", [])
 
 
