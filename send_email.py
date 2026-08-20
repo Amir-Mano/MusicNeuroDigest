@@ -1,11 +1,14 @@
 """Skill 3: build and send the weekly digest email via Gmail SMTP."""
 
+import logging
 import smtplib
 from datetime import date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import config
+
+log = logging.getLogger(__name__)
 
 
 def _authors_line(a: dict) -> str:
@@ -172,3 +175,34 @@ def send_digest(
         server.starttls()
         server.login(config.EMAIL_ADDRESS, config.EMAIL_APP_PASSWORD)
         server.sendmail(config.EMAIL_ADDRESS, [config.EMAIL_TO], msg.as_string())
+
+
+def send_error_email(error_summary: str) -> None:
+    """Last-resort failure notice: sent when run() crashes despite the
+    per-source guards, so a broken run surfaces as an email instead of
+    silence. Never raises -- if the mailer itself is what's broken, the
+    original exception (already logged by the caller) is what matters, not
+    a secondary failure here.
+    """
+    if not (config.EMAIL_ADDRESS and config.EMAIL_APP_PASSWORD and config.EMAIL_TO):
+        log.error("Cannot send failure notification: email credentials not configured")
+        return
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"Music & Neuroplasticity Digest -- RUN FAILED ({date.today().isoformat()})"
+        msg["From"] = config.EMAIL_ADDRESS
+        msg["To"] = config.EMAIL_TO
+        body = (
+            "The weekly digest run failed and no digest was sent this week.\n\n"
+            f"Error: {error_summary}\n\n"
+            "See logs/run.log on the machine that runs the job for the full traceback."
+        )
+        msg.attach(MIMEText(body, "plain"))
+
+        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT) as server:
+            server.starttls()
+            server.login(config.EMAIL_ADDRESS, config.EMAIL_APP_PASSWORD)
+            server.sendmail(config.EMAIL_ADDRESS, [config.EMAIL_TO], msg.as_string())
+    except Exception:
+        log.exception("Failed to send failure-notification email")

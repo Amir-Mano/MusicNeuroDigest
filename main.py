@@ -39,7 +39,11 @@ def run() -> None:
 
         # Pull in fresh PubMed hits, skipping anything already sent or already queued.
         queued_pmids = {a["pmid"] for a in pending}
-        fresh = search_articles.get_new_articles(seen_pmids | queued_pmids)
+        try:
+            fresh = search_articles.get_new_articles(seen_pmids | queued_pmids)
+        except Exception:
+            log.exception("PubMed article search failed; continuing with existing backlog only")
+            fresh = []
         if fresh:
             log.info("Found %d fresh article(s): %s", len(fresh), [a["pmid"] for a in fresh])
         pending.extend(fresh)
@@ -50,9 +54,13 @@ def run() -> None:
         this_week = ranked[: config.MAX_DIGEST_SIZE]
         backlog = ranked[config.MAX_DIGEST_SIZE :]
 
-        classic = search_articles.get_classic_article(
-            seen_classic_pmids | seen_pmids | {a["pmid"] for a in this_week}
-        )
+        try:
+            classic = search_articles.get_classic_article(
+                seen_classic_pmids | seen_pmids | {a["pmid"] for a in this_week}
+            )
+        except Exception:
+            log.exception("Classic-pick search failed; continuing without a classic pick this run")
+            classic = None
 
         # Preprints are tracked entirely separately (own state, own backlog, own
         # small cap) since they're not peer-reviewed and shouldn't crowd out or
@@ -60,7 +68,11 @@ def run() -> None:
         seen_preprint_ids = preprints.load_seen_preprint_ids()
         pending_preprints = preprints.load_pending_preprints()
         queued_preprint_ids = {p["pmid"] for p in pending_preprints}
-        fresh_preprints = preprints.get_new_preprints(seen_preprint_ids | queued_preprint_ids)
+        try:
+            fresh_preprints = preprints.get_new_preprints(seen_preprint_ids | queued_preprint_ids)
+        except Exception:
+            log.exception("Preprint search failed; continuing without new preprints this run")
+            fresh_preprints = []
         if fresh_preprints:
             log.info(
                 "Found %d fresh preprint(s): %s",
@@ -116,8 +128,9 @@ def run() -> None:
         preprints.save_pending_preprints(preprint_backlog)
 
         log.info("Digest sent; state updated.")
-    except Exception:
+    except Exception as exc:
         log.exception("Run failed")
+        send_email.send_error_email(f"{type(exc).__name__}: {exc}")
         raise
     finally:
         log.info("Run finished")
