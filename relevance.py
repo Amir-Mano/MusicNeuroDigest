@@ -1,24 +1,11 @@
 """Score how relevant an article is to Amir's research (music learning,
-neuroplasticity, and brass/trombone performance) using local keyword
+neuroplasticity, and instrument-specific brain differences) using local keyword
 matching -- no external API, no billing.
 """
 
 import re
 
-# (keyword, weight) -- higher weight = more central to Amir's specific work.
-_KEYWORDS = [
-    ("trombone", 5), ("embouchure", 5), ("brass", 3), ("wind instrument", 3),
-    ("wind instruments", 3), ("auditory-motor", 4), ("audiomotor", 4),
-    ("sensorimotor integration", 3), ("sensorimotor", 2), ("motor learning", 3),
-    ("music training", 3), ("musical training", 3), ("musician", 2), ("musicians", 2),
-    ("instrumentalist", 3), ("instrumentalists", 3), ("neuroplasticity", 3),
-    ("neural plasticity", 3), ("plasticity", 2), ("cortical reorganization", 3),
-    ("structural plasticity", 3), ("gray matter", 2), ("grey matter", 2),
-    ("white matter", 2), ("functional connectivity", 2), ("motor cortex", 2),
-    ("cerebellum", 2), ("procedural learning", 2), ("skill acquisition", 2),
-    ("expertise", 2), ("longitudinal", 1), ("neuroimaging", 1),
-    ("fmri", 1), ("mri", 1), ("eeg", 1), ("meg", 1),
-]
+from keywords import KEYWORDS as _KEYWORDS
 
 
 def score_article(article: dict) -> float:

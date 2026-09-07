@@ -37,10 +37,12 @@ Three "skills" orchestrated by `main.py`:
   relevance-sorted search over articles older than `CLASSIC_MIN_AGE_DAYS` for the classic pick.
   Owns all state file I/O (`state/seen_pmids.json`, `state/seen_classic_pmids.json`,
   `state/pending_articles.json`).
-- `relevance.py` — scores an article dict against a hand-maintained weighted keyword list
-  (`_KEYWORDS`) reflecting the target research focus. No ML, no embeddings — just weighted
-  regex counts over title (2x) and abstract (1x). Used both to rank the weekly batch (so the
-  top-ranked article becomes the "must-read") and to filter classic-pick candidates.
+- `relevance.py` — scores an article dict against a weighted keyword list reflecting the
+  target research focus. No ML, no embeddings — just weighted regex counts over title (2x)
+  and abstract (1x). Used both to rank the weekly batch (so the top-ranked article becomes
+  the "must-read") and to filter classic-pick candidates. The keyword list itself lives in
+  `keywords.py`, not inline — edit that file to retune relevance as the research focus
+  evolves; no other code needs to change.
 - `citations.py` — looks up citation counts for a batch of PMIDs via NIH's free iCite API.
   Used only for ranking classic-pick candidates by actual impact.
 - `metadata_extraction.py` — pure local heuristics (no network) that derive four per-article
