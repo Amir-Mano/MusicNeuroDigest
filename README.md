@@ -132,14 +132,30 @@ $task.Settings.StartWhenAvailable = $true
 Set-ScheduledTask -InputObject $task | Out-Null
 ```
 
+**On a laptop, also disable the "don't run on battery" default.** `schtasks /create`
+leaves `DisallowStartIfOnBatteries` / `StopIfGoingOnBatteries` both `true`, which
+silently queues the task (no run, no log entry, no error email — Python never even
+starts) any time the trigger fires while unplugged:
+
+```powershell
+$settings = (Get-ScheduledTask -TaskName "MusicNeuroDigest").Settings
+$settings.DisallowStartIfOnBatteries = $false
+$settings.StopIfGoingOnBatteries = $false
+Set-ScheduledTask -TaskName "MusicNeuroDigest" -Settings $settings | Out-Null
+```
+
+If a scheduled run is ever silently missing (no log entry, no error email), check
+`Get-ScheduledTask -TaskName "MusicNeuroDigest" | Select State` — `Queued` means it's
+stuck on a condition like this rather than having actually failed.
+
 ## Tuning
 
 - `config.py`: `PUBMED_QUERY` / `SEARCH_LOOKBACK_DAYS` (search scope),
   `MAX_DIGEST_SIZE` (per-email cap), `CLASSIC_MIN_AGE_DAYS` /
   `CLASSIC_CANDIDATE_POOL` (classic-pick behavior), `PREPRINT_QUERY` /
   `PREPRINT_MAX_PER_DIGEST` (preprint search and cap).
-- `relevance.py`: `_KEYWORDS` — adjust the weighted keyword list to match your
-  own research focus if you fork this for a different field.
+- `keywords.py`: the weighted keyword list `relevance.py` scores articles against —
+  edit it directly to retune relevance as your research focus evolves.
 - `metadata_extraction.py`: `_MODALITY_PATTERNS` / `_FMRI_METRIC_PATTERNS` /
   `_DIFFUSION_METRIC_PATTERNS` / `_EEG_METRIC_PATTERNS` / `_DESIGN_PATTERNS` —
   extend these if you notice a common method/design term the digest is missing.

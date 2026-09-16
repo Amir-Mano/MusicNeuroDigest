@@ -117,3 +117,18 @@ Claude-Code-specific scheduling — see README for the `schtasks` command. The t
 `StartWhenAvailable` enabled so a missed run (PC off/asleep) fires as soon as the machine is
 next available rather than silently skipping that week. The pipeline has no dependency on
 Claude Code or any Anthropic service at runtime.
+
+Two ways this has silently failed before, both outside Python's own error handling (so
+neither produced a `logs/run.log` entry or an error email — the process never got far enough
+to hit `main.py`'s try/except):
+
+- **The task's target path going stale.** `schtasks`'s `/TR` action is an absolute path; if
+  the project folder is ever moved, the task keeps pointing at the old (now-missing) location
+  and fails instantly. `venv\Scripts\activate.bat` also hardcodes `VIRTUAL_ENV` to an absolute
+  path at creation time and needs the same fix after a move.
+- **Running on battery.** `schtasks /create` defaults to `DisallowStartIfOnBatteries` /
+  `StopIfGoingOnBatteries` = `true`. On a laptop, a trigger firing while unplugged just queues
+  the task forever instead of running it. Check `Get-ScheduledTask -TaskName
+  "MusicNeuroDigest" | Select State` — `Queued` (rather than `Ready` or `Running`) means it's
+  stuck on a condition like this, not that it errored. Both are disabled on this machine's
+  task; see README for the commands to re-apply after recreating the task.
